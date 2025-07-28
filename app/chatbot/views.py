@@ -64,14 +64,7 @@ def simulate_hundred_convos(request):
     return JsonResponse({"conversations": results})
 
 
-def vegetarian_users(request):
-    vegan_rows = Conversation.objects.filter(diet_label__in=["vegan"])
-    vegetarian_rows = Conversation.objects.filter(diet_label__in=["vegetarian"])
-    vegan_data = [{"foods": r.foods_raw, "diet": r.diet_label, "timestamp": r.created_at}
-            for r in vegan_rows]
-    vegetarian_data = [{"foods": r.foods_raw, "diet": r.diet_label, "timestamp": r.created_at}
-            for r in vegetarian_rows]
-    return JsonResponse({"vegans": vegan_data, "vegetarians": vegetarian_data})
+
 
 API_USER = os.getenv("API_USER", "user")
 API_PASS = os.getenv("API_PASS", "password")
@@ -89,6 +82,19 @@ def basic_auth_required(view):
         return resp
     return wrapped
 
+def get_top_foods(veg_rows):
+    """Count all individual foods and return top 3 most popular"""
+    food_counts = {}
+    for row in veg_rows:
+        foods = [food.strip() for food in row.foods_raw.split(",")]
+        for food in foods:
+            if food:  # skip empty strings
+                food_counts[food] = food_counts.get(food, 0) + 1
+    
+    # Sort by count (descending) and get top 3
+    sorted_foods = sorted(food_counts.items(), key=lambda x: x[1], reverse=True)
+    return [{"food": food, "count": count} for food, count in sorted_foods[:3]]
+
 @csrf_exempt
 @basic_auth_required
 def veg_api(request):
@@ -97,4 +103,5 @@ def veg_api(request):
       {"foods": r.foods_raw, "diet": r.diet_label, "time": r.created_at.isoformat()}
       for r in veg_rows
     ]
-    return JsonResponse({"results": data})
+    top_foods = get_top_foods(veg_rows)
+    return JsonResponse({"results": data, "top_foods": top_foods})
